@@ -40,4 +40,4 @@ def print_warning(console: Console, msg: str) -> None:
 
 
 def print_error(console: Console, msg: str) -> None:
-    console.print(f"[bold red]✗[/] {msg}", stderr=True)
+    Console(stderr=True, no_color=console.no_color, highlight=False).print(f"[bold red]✗[/] {msg}")
