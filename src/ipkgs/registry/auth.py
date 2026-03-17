@@ -69,22 +69,19 @@ class AuthManager:
     async def login_browser(self, provider: str = "github") -> str:
         """
         Full OAuth browser login flow:
-          1. GET /auth/login?provider=<provider>&cli_callback=http://localhost:9876/callback
-          2. Open returned URL in browser
-          3. Receive access_token at local callback server (query param or hash fragment)
-          4. POST /auth/token to exchange for ipkgs_ API token
+          1. Browser opens /auth/login?provider=...&cli_callback=... directly
+             (server sets PKCE cookies on the browser, then redirects to Supabase)
+          2. User authenticates with GitHub/Google
+          3. Supabase → /auth/callback → redirects to localhost:9876/callback?access_token=
+          4. POST /auth/token to exchange Supabase access_token for ipkgs_ API token
           5. Store in keyring and return token
         """
         callback_url = f"http://{CALLBACK_HOST}:{CALLBACK_PORT}/callback"
 
-        # Step 1 — fetch the OAuth redirect URL from the registry
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{self._registry}/auth/login",
-                params={"provider": provider, "cli_callback": callback_url},
-            )
-            resp.raise_for_status()
-            auth_url: str = resp.json()["url"]
+        # Step 1 — build the URL that the BROWSER will open (not a CLI HTTP call).
+        # This ensures Supabase PKCE cookies are set in the browser, not our process.
+        params = urllib.parse.urlencode({"provider": provider, "cli_callback": callback_url})
+        auth_url = f"{self._registry}/auth/login?{params}"
 
         # Step 2 — start local callback server, open browser
         access_token = await _run_callback_server(auth_url, self._registry)
